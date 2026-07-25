@@ -1,2 +1,2 @@
-# External-Secret-Operators
-Showing the Use of External Secret Operator (ESO) to handle secrets in kubernetes 
+# Production Grade Harshicorp Vault Setup 
+Showing the Use of Harshicorp Vaults to handle secrets in kubernetes 
