@@ -13,13 +13,13 @@ variable "aws_region" {
 variable "vault_namespace" {
   description = "Kubernetes namespace where Vault is deployed"
   type        = string
-  default     = "vault"
+  default     = "vault-ns"
 }
 
 variable "vault_service_account_name" {
   description = "ServiceAccount name used by Vault server pods (matches the Helm chart's default)"
   type        = string
-  default     = "vault"
+  default     = "vault-sa"
 }
 
 variable "kms_key_deletion_window" {
