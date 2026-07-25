@@ -1,190 +1,177 @@
-provider "aws" {
-  region = "us-east-1"
-}
-
-resource "aws_vpc" "bj_vpc" {
-  cidr_block = "10.0.0.0/16"
-
-  tags = {
-    Name = "bj-vpc"
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    kubernetes = { source = "hashicorp/kubernetes", version = "~> 2.29" }
   }
 }
 
-resource "aws_subnet" "bj_subnet" {
-  count = 2
-  vpc_id                  = aws_vpc.bj_vpc.id
-  cidr_block              = cidrsubnet(aws_vpc.bj_vpc.cidr_block, 8, count.index)
-  availability_zone       = element(["us-east-1b", "us-east-1c"], count.index)
-  map_public_ip_on_launch = true
+provider "aws" { region = var.region }
 
-  tags = {
-    Name = "bj-subnet-${count.index}"
+# ---------------- AZs & Subnets ----------------
+data "aws_availability_zones" "available" { state = "available" }
+
+locals {
+  azs             = slice(data.aws_availability_zones.available.names, 0, var.az_count)
+  public_subnets  = [for i, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, i)]
+  private_subnets = [for i, _ in local.azs : cidrsubnet(var.vpc_cidr, 4, i + 8)]
+}
+
+# ---------------- VPC ----------------
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.21"
+
+  name = "${var.cluster_name}-vpc"
+  cidr = var.vpc_cidr
+  azs  = local.azs
+
+  public_subnets  = local.public_subnets
+  private_subnets = local.private_subnets
+
+  enable_nat_gateway = true
+  single_nat_gateway = true
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  # K8s subnet tags for LB/Ingress discovery
+  public_subnet_tags = {
+    "kubernetes.io/role/elb"                    = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  }
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb"           = "1"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  }
+
+  tags = var.tags
+}
+
+# ---------------- EKS (IRSA ON) ----------------
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 20.37"
+
+  cluster_name        = var.cluster_name
+  cluster_version     = var.kubernetes_version
+  vpc_id              = module.vpc.vpc_id
+  subnet_ids          = module.vpc.private_subnets
+
+  enable_irsa                              = true
+  enable_cluster_creator_admin_permissions = true
+  cluster_endpoint_public_access           = true
+
+  cluster_addons = {
+    coredns   = {}
+    kube-proxy = {}
+    vpc-cni   = {}
+  }
+
+  eks_managed_node_groups = {
+    workers = {
+      instance_types = var.node_types
+      desired_size   = var.node_desired
+      min_size       = var.node_min
+      max_size       = var.node_max
+      disk_size      = var.node_disk_gib
+      labels         = { role = "worker" }
+      tags           = var.tags
+      # capacity_type = "SPOT"
+    }
+  }
+
+  tags = var.tags
+}
+
+# ---------------- IRSA role for EBS CSI ----------------
+data "aws_iam_policy" "ebs_csi" {
+  arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+data "aws_iam_policy_document" "ebs_csi_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    effect  = "Allow"
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
+    }
   }
 }
 
-resource "aws_internet_gateway" "bj_igw" {
-  vpc_id = aws_vpc.bj_vpc.id
-
-  tags = {
-    Name = "bj-igw"
-  }
+resource "aws_iam_role" "ebs_csi" {
+  name               = "${var.cluster_name}-ebs-csi-irsa"
+  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
+  tags               = var.tags
 }
 
-resource "aws_route_table" "bj_route_table" {
-  vpc_id = aws_vpc.bj_vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.bj_igw.id
-  }
-
-  tags = {
-    Name = "bj-route-table"
-  }
+resource "aws_iam_role_policy_attachment" "ebs_csi_attach" {
+  role       = aws_iam_role.ebs_csi.name
+  policy_arn = data.aws_iam_policy.ebs_csi.arn
 }
 
-resource "aws_route_table_association" "bj_association" {
-  count          = 2
-  subnet_id      = aws_subnet.bj_subnet[count.index].id
-  route_table_id = aws_route_table.bj_route_table.id
-}
+# ---------------- AWS-managed EBS CSI add-on ----------------
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = module.eks.cluster_name
+  addon_name               = "aws-ebs-csi-driver"
+  # addon_version          = "v1.30.x-eksbuild.y"
+  service_account_role_arn = aws_iam_role.ebs_csi.arn
 
-resource "aws_security_group" "bj_cluster_sg" {
-  vpc_id = aws_vpc.bj_vpc.id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "bj-cluster-sg"
-  }
-}
-
-resource "aws_security_group" "bj_node_sg" {
-  vpc_id = aws_vpc.bj_vpc.id
-
-  ingress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "bj-node-sg"
-  }
-}
-
-resource "aws_eks_cluster" "bj" {
-  name     = "bj-cluster"
-  role_arn = aws_iam_role.bj_cluster_role.arn
-
-  vpc_config {
-    subnet_ids         = aws_subnet.bj_subnet[*].id
-    security_group_ids = [aws_security_group.bj_cluster_sg.id]
-  }
-}
-
-
-resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name    = aws_eks_cluster.bj.name
-  addon_name      = "aws-ebs-csi-driver"
-  
+  # New conflict flags
+  # Kindly comment out the two lines below in case of any issue aarises during (terraform appy)
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-}
 
+  tags = var.tags
 
-resource "aws_eks_node_group" "bj" {
-  cluster_name    = aws_eks_cluster.bj.name
-  node_group_name = "bj-node-group"
-  node_role_arn   = aws_iam_role.bj_node_group_role.arn
-  subnet_ids      = aws_subnet.bj_subnet[*].id
-
-  scaling_config {
-    desired_size = 3
-    max_size     = 3
-    min_size     = 3
-  }
-
-  instance_types = ["t2.medium"]
-
-  remote_access {
-    ec2_ssh_key = var.ssh_key_name
-    source_security_group_ids = [aws_security_group.bj_node_sg.id]
-  }
-}
-
-resource "aws_iam_role" "bj_cluster_role" {
-  name = "bj-cluster-role"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
+  depends_on = [
+    aws_iam_role_policy_attachment.ebs_csi_attach,
+    module.eks
   ]
 }
-EOF
+
+# ---------------- Kubernetes auth (NO cluster data read) ----------------
+# Only fetch the token after the cluster is created
+data "aws_eks_cluster_auth" "this" {
+  name       = module.eks.cluster_name
+  depends_on = [module.eks]
 }
 
-resource "aws_iam_role_policy_attachment" "bj_cluster_role_policy" {
-  role       = aws_iam_role.bj_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+# Configure provider using module outputs (endpoint/CA) + token
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.this.token
 }
 
-resource "aws_iam_role" "bj_node_group_role" {
-  name = "bj-node-group-role"
-
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
+# ---------------- Default gp3 StorageClass ----------------
+resource "kubernetes_storage_class_v1" "gp3_default" {
+  metadata {
+    name = "gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
     }
-  ]
-}
-EOF
-}
+  }
+  storage_provisioner    = "ebs.csi.aws.com"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+  parameters = {
+    type   = "gp3"
+    fsType = "ext4"
+  }
 
-resource "aws_iam_role_policy_attachment" "bj_node_group_role_policy" {
-  role       = aws_iam_role.bj_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "bj_node_group_cni_policy" {
-  role       = aws_iam_role.bj_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "bj_node_group_registry_policy" {
-  role       = aws_iam_role.bj_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-resource "aws_iam_role_policy_attachment" "bj_node_group_ebs_policy" {
-  role       = aws_iam_role.bj_node_group_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  depends_on = [aws_eks_addon.ebs_csi]
 }
