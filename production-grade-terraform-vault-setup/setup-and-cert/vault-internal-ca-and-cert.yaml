@@ -1,0 +1,80 @@
+# Most production Vault deployments keep Vault INTERNAL to the
+# cluster/VPC only - it should not be reachable from the public
+# internet. In that case, a public Let's Encrypt cert (previous
+# file) doesn't make sense, since HTTP-01/DNS-01 validation aside,
+# you don't want Vault's endpoint publicly resolvable at all.
+#
+# The better pattern for internal-only Vault: cert-manager with
+# a self-signed root CA, used purely to issue Vault's internal
+# TLS cert. Clients (like the ESO ClusterSecretStore from earlier)
+# trust this CA explicitly rather than relying on public trust
+# chains.
+
+---
+# 1. A self-signed root issuer (bootstraps the CA)
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-bootstrap
+  namespace: vault
+spec:
+  selfSigned: {}
+
+---
+# 2. A CA certificate signed by the bootstrap issuer
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-internal-ca
+  namespace: vault
+spec:
+  secretName: vault-internal-ca-secret
+  isCA: true
+  commonName: vault-internal-ca
+  duration: 8760h    # 1 year
+  issuerRef:
+    name: selfsigned-bootstrap
+    kind: Issuer
+
+---
+# 3. A real CA issuer, backed by the CA cert above
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: vault-internal-issuer
+  namespace: vault
+spec:
+  ca:
+    secretName: vault-internal-ca-secret
+
+---
+# 4. The actual cert Vault's listener will use, covering every
+#    DNS name a pod might use to reach any Vault replica
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls-internal
+  namespace: vault
+spec:
+  secretName: vault-tls              # matches server.extraVolumes in Helm values
+  duration: 2160h                     # 90 days
+  renewBefore: 360h
+  issuerRef:
+    name: vault-internal-issuer
+    kind: Issuer
+  dnsNames:
+    - vault
+    - vault.vault
+    - vault.vault.svc
+    - vault.vault.svc.cluster.local
+    - vault-0.vault-internal
+    - vault-1.vault-internal
+    - vault-2.vault-internal
+    - vault-0.vault-internal.vault.svc.cluster.local
+    - vault-1.vault-internal.vault.svc.cluster.local
+    - vault-2.vault-internal.vault.svc.cluster.local
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth

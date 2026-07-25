@@ -1,0 +1,29 @@
+# Reuses the same letsencrypt-prod ClusterIssuer seen earlier
+# (from the bankapp-ingress Certificate) - no need to create a
+# new issuer if one already exists in the cluster.
+#
+# NOTE: Let's Encrypt's HTTP-01 challenge requires the domain to
+# be publicly resolvable and reachable on port 80. Vault's internal
+# cluster address (vault.vault.svc.cluster.local) will NOT satisfy
+# this. Use a DNS-01 challenge instead if Vault isn't exposed
+# externally, OR point this cert at a real public hostname
+# (e.g. vault.bbprojects.space) that you do want to expose via
+# Ingress/LoadBalancer.
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: vault-tls
+  namespace: vault
+spec:
+  secretName: vault-tls          # referenced in Vault's Helm values as extraVolumes
+  duration: 2160h                 # 90 days, matches Let's Encrypt's cert lifetime
+  renewBefore: 360h               # renew 15 days before expiry
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - vault.bbprojects.space      # replace with your actual Vault hostname
+  usages:
+    - digital signature
+    - key encipherment
