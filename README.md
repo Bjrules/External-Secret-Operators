@@ -195,4 +195,16 @@ KUBE_CA_CERT=$(kubectl get secret $(kubectl get serviceaccount $SERVICE_ACCOUNT_
 
 ```
 
+![alt text](IMG-Screenshots/Screenshot_20260726_003618.png)
+
+
+Configure in Vault:
+
+```
+kubectl exec -n vault -it vault-0 -- vault write auth/kubernetes/config \ token_reviewer_jwt="$TOKEN_REVIEW_JWT" \
+	kubernetes_host="$KUBE_HOST" \
+	kubernetes_ca_cert="$KUBE_CA_CERT"
+
+```
+
 
