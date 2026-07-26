@@ -45,4 +45,65 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 ---
 ### Set Up Hashicorp Vault. Prod Style
 
--[ ] Create Namespace for Vault `kubectl create namespace vault` Note: the name must be `vault`
+-[ ] Create Namespace for Vault to separate Vault’s workloads from the rest of your cluster for organization and RBAC control. Note: the name must be `vault` 
+
+ `kubectl create namespace vault` 
+
+-[ ]  Add Helm Repo and Install Vault with Raft HA
+```
+ helm repo add hashicorp https://helm.releases.hashicorp.com
+ helm repo update
+
+```
+ -[ ]  Create `vault-values.yaml` for Production:
+
+```
+server:
+  ha:
+    enabled: true
+    replicas: 3
+    raft:
+      enabled: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          address       = "0.0.0.0:8200"
+          cluster_address = "0.0.0.0:8201"
+          tls_disable   = 1
+        }
+
+        storage "raft" {
+          path = "/vault/data"
+
+          retry_join {
+            leader_api_addr = "http://vault-0.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-1.vault-internal:8200"
+          }
+          retry_join {
+            leader_api_addr = "http://vault-2.vault-internal:8200"
+          }
+        }
+
+        service_registration "kubernetes" {}
+
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: "gp2"  # or "ebs-sc" if you've defined your own
+
+  extraEnvironmentVars:
+    VAULT_LOG_LEVEL: "debug"
+
+injector:
+  enabled: true
+
+ui:
+  enabled: true
+
+```
+Install Vault with this config:
+`helm install vault hashicorp/vault -n vault -f vault-values.yaml`
+
