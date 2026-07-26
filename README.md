@@ -262,3 +262,14 @@ kubectl exec -n vault -it vault-0 -- vault kv put secret/mysql MYSQL_DATABASE=ba
 kubectl exec -n vault -it vault-0 -- vault kv put secret/frontend MYSQL_ROOT_PASSWORD=Test@123
 
 ```
+![alt text](IMG-Screenshots/Screenshot_20260726_003756.png)
+
+![alt text](IMG-Screenshots/Screenshot_20260726_003834.png)
+
+![alt text](IMG-Screenshots/Screenshot_20260726_003907.png)
+
+## Study the Annotation section of the manifest.yaml file in this repo and appy accordingly  
+
+`kubectl apply -f manifest.yaml -n webapps`
+
+# THANK YOU.
