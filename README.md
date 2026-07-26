@@ -45,17 +45,17 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 ---
 ### Set Up Hashicorp Vault. Prod Style
 
--[ ] Create Namespace for Vault to separate Vault’s workloads from the rest of your cluster for organization and RBAC control. Note: the name must be `vault` 
+- [ ] Create Namespace for Vault to separate Vault’s workloads from the rest of your cluster for organization and RBAC control. Note: the name must be `vault` 
 
  `kubectl create namespace vault` 
 
--[ ]  Add Helm Repo and Install Vault with Raft HA
+- [ ]  Add Helm Repo and Install Vault with Raft HA
 ```
  helm repo add hashicorp https://helm.releases.hashicorp.com
  helm repo update
 
 ```
- -[ ]  Create `vault-values.yaml` for Production:
+ - [ ]  Create `vault-values.yaml` for Production:
 
  ![alt text](IMG-Screenshots/Screenshot_20260725_154659.png)
  Image showing that all containers are sealed 
@@ -110,10 +110,10 @@ ui:
 
 ```
 
- -[ ] Install Vault with this config:
+ - [ ] Install Vault with this config:
 `helm install vault hashicorp/vault -n vault -f vault-values.yaml`
 
- -[ ] Create s Service vailt-service.yaml
+ - [ ] Create s Service vailt-service.yaml
  
  ```
 apiVersion: v1
@@ -134,7 +134,7 @@ Apply it: `kubectl apply -f vault-service.yaml`
 
 ![alt text](IMG-Screenshots/Screenshot_20260726_003552.png)
 
--[ ] Initialize Vault (Run Once)
+- [ ] Initialize Vault (Run Once)
 `kubectl exec -n vault -it vault-0 -- vault operator init` 
 Copy and save:
     • 5 unseal keys
@@ -145,7 +145,7 @@ Copy and save:
 
 ![alt text](IMG-Screenshots/Screenshot_20260725_154825.png)
 
--[ ] Unseal Vault on All Pods
+- [ ] Unseal Vault on All Pods
 Use any 3 keys on each Vault pod:
 kubectl exec -n vault -it vault-0 -- vault operator unseal 7AIVD2SsCCKEMACprf2LW6abXd12HietfAQsN1/yRsIQ
 kubectl exec -n vault -it vault-1 -- vault operator unseal 
@@ -157,14 +157,14 @@ kubectl exec -n vault -it vault-2 -- vault operator unseal
 
 ![alt text](IMG-Screenshots/Screenshot_20260726_003526.png)
 
--[ ] Login to Vault CLI
+- [ ] Login to Vault CLI
 kubectl exec -n vault -it vault-0 -- vault login <Initial Root Token>
 
--[ ] Enable Kubernetes Authentication
+- [ ] Enable Kubernetes Authentication
 kubectl exec -n vault -it vault-0 -- vault auth enable kubernetes
 
 ![alt text](IMG-Screenshots/Screenshot_20260726_003618.png)
 
--[ ] Create Service Account for App Pods
+- [ ] Create Service Account for App Pods
 kubectl create namespace webapps
 kubectl create serviceaccount vault-auth -n webapps
