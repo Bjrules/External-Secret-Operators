@@ -95,7 +95,7 @@ resource "aws_eks_cluster" "bnj" {
     security_group_ids = [aws_security_group.bnj_cluster_sg.id]
   }
 }
-############################# With Claude Contribution which solves aws_ebs_csi addon problem ############################
+####################### With Claude Contribution which solves aws_ebs_csi addon problem ############################
 
 data "aws_iam_openid_connect_provider" "eks" {
   url = aws_eks_cluster.bnj.identity[0].oidc[0].issuer
