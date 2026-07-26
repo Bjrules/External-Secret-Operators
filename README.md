@@ -11,6 +11,11 @@ Showing the Use of Harshicorp Vaults to handle secrets in kubernetes
 - [ ] Install Helm
 - [ ] Install EKS Using Terraform `terraform init` and `terraform apply –-auto-approve`
 
+
+
+
+
+
 `eksctl utils associate-iam-oidc-provider --region us-east-1 --cluster bnj-cluster --approve`
 
  `aws eks --region us-east-1 update-kubeconfig --name bnj-cluster`
