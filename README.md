@@ -1,7 +1,7 @@
 # Production Grade Harshicorp Vault Setup 
 Showing the Use of Harshicorp Vaults to handle secrets in kubernetes 
 
-#### Set Up EKS Cluster
+### Set-Up EKS Cluster
 ***
 
 - [ ] Install AWS CLI
@@ -31,5 +31,18 @@ Showing the Use of Harshicorp Vaults to handle secrets in kubernetes
   --override-existing-serviceaccounts
 
  ```
+Install kubenetes signature for aws_ebs_csi_driver , nginx Ingress, and Cert Manager
+
+ ```
+ kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=release-1.11"
+
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
+
+ ```
 
 ---
+### Set Up Hashicorp Vault. Prod Style
+
+-[ ] Create Namespace for Vault `kubectl create namespace vault` Note: the name must be `vault`
