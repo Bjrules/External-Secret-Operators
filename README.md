@@ -58,7 +58,7 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
  - [ ]  Create `vault-values.yaml` for Production:
 
  ![alt text](IMG-Screenshots/Screenshot_20260725_154659.png)
- 
+
  Image showing that all containers are sealed 
 
 ```
@@ -175,5 +175,7 @@ Use any 3 keys on each Vault pod:
 `kubectl create namespace webapps`
 
 `kubectl create serviceaccount vault-auth -n webapps`
+
+
 
 
