@@ -104,6 +104,34 @@ ui:
   enabled: true
 
 ```
-Install Vault with this config:
+
+ -[ ] Install Vault with this config:
 `helm install vault hashicorp/vault -n vault -f vault-values.yaml`
+
+ -[ ] Create s Service vailt-service.yaml
+ 
+ ```
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: vault
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8200
+      targetPort: 8200
+  selector:
+    app.kubernetes.io/name: vault
+
+ ```
+Apply it: `kubectl apply -f vault-service.yaml`
+
+-[ ] Initialize Vault (Run Once)
+`kubectl exec -n vault -it vault-0 -- vault operator init` 
+Copy and save:
+    • 5 unseal keys
+    • 1 initial root token
+    
+
 
