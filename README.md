@@ -147,9 +147,11 @@ Copy and save:
 
 - [ ] Unseal Vault on All Pods
 Use any 3 keys on each Vault pod:
-kubectl exec -n vault -it vault-0 -- vault operator unseal 7AIVD2SsCCKEMACprf2LW6abXd12HietfAQsN1/yRsIQ
-kubectl exec -n vault -it vault-1 -- vault operator unseal 
-kubectl exec -n vault -it vault-2 -- vault operator unseal 
+`kubectl exec -n vault -it vault-0 -- vault operator unseal 7AIVD2SsCCKEMACprf2LW6abXd12HietfAQsN1/yRsIQ`
+
+`kubectl exec -n vault -it vault-1 -- vault operator unseal `
+
+`kubectl exec -n vault -it vault-2 -- vault operator unseal `
 
 ![alt text](IMG-Screenshots/Screenshot_20260726_003343.png)
 
@@ -158,13 +160,19 @@ kubectl exec -n vault -it vault-2 -- vault operator unseal
 ![alt text](IMG-Screenshots/Screenshot_20260726_003526.png)
 
 - [ ] Login to Vault CLI
-kubectl exec -n vault -it vault-0 -- vault login <Initial Root Token>
+
+`kubectl exec -n vault -it vault-0 -- vault login <Initial Root Token>`
 
 - [ ] Enable Kubernetes Authentication
-kubectl exec -n vault -it vault-0 -- vault auth enable kubernetes
+
+`kubectl exec -n vault -it vault-0 -- vault auth enable kubernetes`
 
 ![alt text](IMG-Screenshots/Screenshot_20260726_003618.png)
 
 - [ ] Create Service Account for App Pods
-kubectl create namespace webapps
-kubectl create serviceaccount vault-auth -n webapps
+
+`kubectl create namespace webapps`
+
+`kubectl create serviceaccount vault-auth -n webapps`
+
+
