@@ -176,6 +176,23 @@ Use any 3 keys on each Vault pod:
 
 `kubectl create serviceaccount vault-auth -n webapps`
 
+- [ ] Configure Kubernetes Auth in Vault
 
+```
+
+SERVICE_ACCOUNT_NAME=vault-auth
+NAMESPACE=webapps
+
+# JWT Token
+TOKEN_REVIEW_JWT=$(kubectl get secret $(kubectl get serviceaccount $SERVICE_ACCOUNT_NAME -n $NAMESPACE -o jsonpath="{.secrets[0].name}") -n $NAMESPACE -o jsonpath="{.data.token}" | base64 --decode)
+
+# Kubernetes API Host
+KUBE_HOST=$(kubectl config view --raw -o=jsonpath='{.clusters[0].cluster.server}')
+
+# Kubernetes CA Cert
+KUBE_CA_CERT=$(kubectl get secret $(kubectl get serviceaccount $SERVICE_ACCOUNT_NAME -n $NAMESPACE -o jsonpath="{.secrets[0].name}") -n $NAMESPACE -o jsonpath="{.data['ca.crt']}" | base64 --decode)
+
+
+```
 
 
