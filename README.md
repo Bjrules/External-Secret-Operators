@@ -198,7 +198,7 @@ KUBE_CA_CERT=$(kubectl get secret $(kubectl get serviceaccount $SERVICE_ACCOUNT_
 ![alt text](IMG-Screenshots/Screenshot_20260726_003618.png)
 
 
-Configure in Vault:
+- [ ] Configure in Vault:
 
 ```
 kubectl exec -n vault -it vault-0 -- vault write auth/kubernetes/config \ token_reviewer_jwt="$TOKEN_REVIEW_JWT" \
@@ -207,4 +207,58 @@ kubectl exec -n vault -it vault-0 -- vault write auth/kubernetes/config \ token_
 
 ```
 
+- [ ] Create Vault Policy
 
+> Create a file myapp-policy.hcl
+
+```
+
+# Access to read/write secret data
+path "secret/data/mysql" {  
+  capabilities = ["create", "update", "read", "delete", "list"]
+}
+
+path "secret/data/frontend" {
+  capabilities = ["create", "update", "read", "delete", "list"]
+}
+
+# Access to list secrets under the path
+path "secret/metadata/mysql" {
+  capabilities = ["list"]
+}
+
+path "secret/metadata/frontend" {
+  capabilities = ["list"]
+}
+
+```
+- [ ] Upload and apply:
+
+`kubectl cp myapp-policy.hcl vault/vault-0:/tmp/myapp-policy.hcl`
+
+`kubectl exec -n vault -it vault-0 -- vault policy write myapp-policy /tmp/myapp-policy.hcl`
+
+![alt text](IMG-Screenshots/Screenshot_20260726_003709.png)
+
+
+![alt text](IMG-Screenshots/Screenshot_20260726_003756.png)
+
+
+- [ ] Create Role in Vault to Map Pod to Policy
+
+```
+kubectl exec -n vault -it vault-0 -- vault write auth/kubernetes/role/vault-role \ bound_service_account_names=vault-auth \ bound_service_account_namespaces="webapps" \
+policies=myapp-policy\
+ ttl=24h
+
+```
+
+- [ ] Store Secrets in Vault and Enable KV V2 Engine
+
+`kubectl exec -n vault -it vault-0 -- vault secrets enable -path=secret -version=2 kv`
+
+```
+kubectl exec -n vault -it vault-0 -- vault kv put secret/mysql MYSQL_DATABASE=bankappdb MYSQL_ROOT_PASSWORD=Test@123
+kubectl exec -n vault -it vault-0 -- vault kv put secret/frontend MYSQL_ROOT_PASSWORD=Test@123
+
+```
